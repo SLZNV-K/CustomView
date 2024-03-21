@@ -1,5 +1,6 @@
 package ru.netology.nmedia.ui
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -7,6 +8,7 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import android.view.animation.LinearInterpolator
 import androidx.core.content.withStyledAttributes
 import ru.netology.nmedia.R
 import ru.netology.nmedia.util.AndroidUtils
@@ -27,6 +29,12 @@ class StatsView @JvmOverloads constructor(
     private var fontSize = AndroidUtils.dp(context, 40F).toFloat()
     private var colors = emptyList<Int>()
     private val backgroundColor = resources.getColor(R.color.divider_color)
+
+    private var progress = 0F
+    private var valueAnimator: ValueAnimator? = null
+    private var startFrom = -90F
+    private var angle = 0F
+    private var currentIndex: Int = -1
 
     init {
         context.withStyledAttributes(attrs, R.styleable.StatsView) {
@@ -88,15 +96,8 @@ class StatsView @JvmOverloads constructor(
             radius,
             paint.apply { color = backgroundColor })
 
-        var startFrom = -90F
-        for ((index, datum) in data.withIndex()) {
-            if (datum != null) {
-                val angle = 360F * datum / sum
-                paint.color = colors.getOrNull(index) ?: randomColor()
-                canvas.drawArc(oval, startFrom, angle, false, paint)
-                startFrom += angle
-            }
-        }
+        drawCircleInParallel(canvas)
+//        drawCircleSequentially(canvas)
 
         drawDot(canvas)
 
@@ -106,6 +107,55 @@ class StatsView @JvmOverloads constructor(
             center.y + textPaint.textSize / 4,
             textPaint,
         )
+    }
+
+    private fun drawCircleSequentially(canvas: Canvas) {
+        if (currentIndex < data.size - 1) {
+            currentIndex++
+            val datum = data[0]
+            if (datum != null) {
+                angle = 360F * datum / sum
+                paint.color = colors.getOrNull(0) ?: randomColor()
+                canvas.drawArc(oval, startFrom, angle * progress, false, paint)
+
+            }
+        }
+        startFrom += angle
+    }
+
+    private fun drawCircleInParallel(canvas: Canvas) {
+        for ((index, datum) in data.withIndex()) {
+            if (datum != null) {
+                angle = 360F * datum / sum
+                paint.color = colors.getOrNull(index) ?: randomColor()
+                canvas.drawArc(oval, startFrom, angle * progress, false, paint)
+                startFrom += angle
+            }
+        }
+        startFrom += (2 * Math.PI * 360 / 180).toFloat() * progress
+    }
+
+
+    fun update() {
+        valueAnimator?.let {
+            it.removeAllListeners()
+            it.cancel()
+        }
+        progress = 0F
+        angle = 0f
+        startFrom = -90f
+        currentIndex = -1
+
+        valueAnimator = ValueAnimator.ofFloat(0F, 1F).apply {
+            addUpdateListener { anim ->
+                progress = anim.animatedValue as Float
+                invalidate()
+            }
+            duration = 1000
+            interpolator = LinearInterpolator()
+        }.also {
+            it.start()
+        }
     }
 
     private fun randomColor() = Random.nextInt(0xFF000000.toInt(), 0xFFFFFFFF.toInt())
